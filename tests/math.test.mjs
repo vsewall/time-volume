@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {basis,extent,dot,dimensions,outputDimensions,outputSpan} from '../dist/math.js';
+test('source aspect ratios survive allocation, including portrait and ultrawide',()=>{for(const[w,h]of[[1920,1080],[1080,1920],[1080,1080],[3440,1440]]){const[a,b]=dimensions(w,h,960);assert.ok(Math.abs(a/b-w/h)<.004);assert.ok(Math.max(a,b)<=960);}});
+test('arbitrary slice rotation is orthonormal',()=>{for(const angles of [[0,0,0],[90,0,0],[0,90,0],[28,-38,71]]){const b=basis(...angles);const v=[b.slice(0,3),b.slice(3,6),b.slice(6,9)];v.forEach(a=>assert.ok(Math.abs(dot(a,a)-1)<1e-10));assert.ok(Math.abs(dot(v[0],v[1]))<1e-10);}});
+test('side slice uses the time extent instead of frame width',()=>{const e=extent(basis(0,90,0),[1,.5625,.85]);assert.ok(Math.abs(e[0]-.85)<1e-10);assert.ok(Math.abs(e[1]-.5625)<1e-10);});
+test('fit never crops and fill never stretches for changing AR',()=>{for(const ar of [9/16,1,16/9,21/9]){const ext=[1,.6,.8],fit=outputSpan(ext,ar,'fit',[1,.6,.8]),fill=outputSpan(ext,ar,'fill',[1,.6,.8]);assert.ok(fit[0]>=2-1e-9&&fit[1]>=1.2-1e-9);assert.ok(fill[0]<=2+1e-9&&fill[1]<=1.2+1e-9);assert.ok(Math.abs(fit[0]/fit[1]-ar)<1e-9);const dims=outputDimensions(ar,960);assert.ok(dims.every(d=>d%2===0));}});

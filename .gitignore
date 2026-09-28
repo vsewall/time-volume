@@ -1,0 +1,6 @@
+.sites-runtime/
+.openai/
+*.tmp
+*.tar.gz
+*preview.png
+_site/

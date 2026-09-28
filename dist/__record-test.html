@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><title>MP4 recording verification</title></head><body><h1>MP4 recording verification</h1><pre id="result">Running…</pre><canvas id="canvas" width="640" height="360"></canvas><video id="playback" controls muted></video><a id="download" hidden download="recording-test.mp4">Download MP4</a><script type="module">
+import {mp4Type} from './recording.js';
+const result=document.querySelector('#result');
+try{
+const mime=mp4Type();if(!mime)throw Error('MP4 not supported');
+const canvas=document.querySelector('#canvas'),ctx=canvas.getContext('2d');const stream=canvas.captureStream(30),rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:2000000}),parts=[];
+rec.ondataavailable=e=>parts.push(e.data);const done=new Promise((resolve,reject)=>{rec.onstop=resolve;rec.onerror=e=>reject(e.error);});
+rec.start();let n=0;const timer=setInterval(()=>{ctx.fillStyle='#151020';ctx.fillRect(0,0,640,360);ctx.fillStyle='#bdacff';ctx.fillRect((n*13)%560,90,80,180);n++;if(n===35){clearInterval(timer);rec.stop();}},34);await done;stream.getTracks().forEach(t=>t.stop());
+const blob=new Blob(parts,{type:mime}),bytes=new Uint8Array(await blob.arrayBuffer());const signature=new TextDecoder().decode(bytes.slice(4,8));if(signature!=='ftyp')throw Error('Not an ISO BMFF MP4');
+const url=URL.createObjectURL(blob),video=document.querySelector('#playback');const loaded=new Promise((resolve,reject)=>{video.onloadeddata=resolve;video.onerror=()=>reject(Error('Playback failed'));});video.src=url;await loaded;
+const seeked=new Promise(resolve=>video.onseeked=resolve);video.currentTime=.5;await seeked;
+const a=document.querySelector('#download');a.href=url;a.hidden=false;result.textContent=`PASS actual MP4 container: ${signature}\nPASS codec: ${rec.mimeType}\nPASS playback and seek: ${video.videoWidth} × ${video.videoHeight}\nPASS ${bytes.length} bytes, ${n} input frames`;
+}catch(e){result.textContent='FAIL '+e.stack;}
+</script></body></html>

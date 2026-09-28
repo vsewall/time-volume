@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><title>GPU verification</title></head><body><h1>GPU verification</h1><pre id="results">Running…</pre><canvas id="view" style="width:320px;height:240px"></canvas><canvas id="out"></canvas><script type="module">
+import {Renderer} from './renderer.js';
+import {cross,dot,norm} from './math.js';
+const lines=[];const log=(name,pass)=>{lines.push(`${pass?'PASS':'FAIL'} ${name}`);document.querySelector('#results').textContent=lines.join('\n');if(!pass)throw Error(name);};
+try{
+const r=new Renderer(document.querySelector('#view'),document.querySelector('#out'));const s={position:0,rx:0,ry:0,rz:0,effect:0,amplitude:.2,frequency:3,phase:0,decay:.6,centerX:0,centerY:0,depth:.85,density:1.65,layers:32,clip:0,renderQuality:1,outputAR:'source',outputRes:160,fit:'fit',zoom:1};
+const c=document.createElement('canvas');c.width=32;c.height=64;const ctx=c.getContext('2d');r.alloc(32,64,4);
+for(let i=0;i<4;i++){ctx.fillStyle=`rgb(${i*60},100,200)`;ctx.fillRect(0,0,32,64);r.upload(c,i);}r.count=4;
+const px=(x=.5,y=.5)=>r.out2d.getImageData(Math.floor(r.ow*x),Math.floor(r.oh*y),1,1).data;
+r.render(s);log('portrait input preserves 1:2 aspect',r.ow===80&&r.oh===160);log('interpolated middle frame',Math.abs(px()[0]-90)<3);
+s.position=-1;r.render(s);log('earliest frame',px()[0]<3);s.position=1;r.render(s);log('latest frame',Math.abs(px()[0]-180)<3);
+r.head=2;s.position=-1;r.render(s);log('ring oldest offset',Math.abs(px()[0]-120)<3);s.position=1;r.render(s);log('ring newest wraps',Math.abs(px()[0]-60)<3);
+r.head=0;s.position=0;s.ry=90;s.outputAR='slice';r.render(s);const left=px(.2)[0],right=px(.8)[0];log('side slice traverses time',Math.abs(left-right)>70);
+s.ry=0;s.outputAR='source';for(const effect of [1,2,3]){s.effect=effect;r.render(s);log(`deformation ${effect} renders without GL error`,r.gl.getError()===r.gl.NO_ERROR&&px()[2]>150);}
+s.effect=2;s.phase=0;r.render(s);const noiseStart=new Uint8Array(r.out2d.getImageData(0,0,r.ow,r.oh).data);s.phase=1;r.render(s);const noiseEnd=r.out2d.getImageData(0,0,r.ow,r.oh).data;log('noise phase endpoints coincide',noiseStart.every((v,i)=>Math.abs(v-noiseEnd[i])<=1));
+s.effect=1;s.phase=0;s.waveAngle=0;r.render(s);const yDiff=Math.abs(px(.5,.25)[0]-px(.5,.5)[0]),xDiff=Math.abs(px(.25,.5)[0]-px(.5,.5)[0]);s.waveAngle=90;r.render(s);log('sine direction rotates in XY',yDiff>5&&xDiff<2&&Math.abs(px(.25,.5)[0]-px(.5,.5)[0])>5&&Math.abs(px(.5,.25)[0]-px(.5,.5)[0])<2);
+s.effect=0;s.outputAR='0.5625';r.render(s);const dims=[r.ow,r.oh];s.ry=50;s.outputAR='slice';r.render(s,{locked:true});log('recording keeps fixed dimensions',r.ow===dims[0]&&r.oh===dims[1]);
+const topCanvas=document.createElement('canvas');topCanvas.width=32;topCanvas.height=64;const top=topCanvas.getContext('2d');top.fillStyle='red';top.fillRect(0,0,32,32);top.fillStyle='blue';top.fillRect(0,32,32,32);ctx.save();ctx.translate(0,64);ctx.scale(1,-1);ctx.drawImage(topCanvas,0,0);ctx.restore();for(let i=0;i<4;i++)r.upload(c,i);s.ry=0;s.outputAR='source';r.render(s);log('source top stays at output top',px(.5,.2)[0]>245&&px(.5,.8)[2]>245);
+// Regression: a homogeneous volume must match the closed-form optical integral
+// even at the old abs(ray.z) = .025 sampling switch. No true slice intersects it.
+ctx.fillStyle='rgb(80,100,160)';ctx.fillRect(0,0,32,64);for(let i=0;i<4;i++)r.upload(c,i);s.position=3;s.density=1.65;
+let worst=0;
+for(const yaw of [1.40,1.54,Math.PI/2,1.60,1.75]){
+r.yaw=yaw;r.pitch=.18;r.render(s);const g=r.gl,w=r.canvas.width,h=r.canvas.height,pixels=new Uint8Array(w*h*4);g.readPixels(0,0,w,h,g.RGBA,g.UNSIGNED_BYTE,pixels);
+const ro=[Math.sin(yaw)*Math.cos(r.pitch)*r.distance,Math.sin(r.pitch)*r.distance,Math.cos(yaw)*Math.cos(r.pitch)*r.distance],f=norm(ro.map(x=>-x)),right=[Math.cos(yaw),0,-Math.sin(yaw)],up=cross(right,f),color=[80/255,100/255,160/255],lum=dot(color,[.2126,.7152,.0722]);
+for(let x=Math.floor(w*.3);x<w*.7;x+=3){const y=Math.floor(h*.5),sx=2*(x+.5)/w-1,sy=2*(y+.5)/h-1,rd=norm(f.map((v,i)=>v+right[i]*sx*w/h*.4142+up[i]*sy*.4142));let enter=0,leave=1e6;for(let j=0;j<3;j++){const a=(-r.half[j]-ro[j])/rd[j],b=(r.half[j]-ro[j])/rd[j];enter=Math.max(enter,Math.min(a,b));leave=Math.min(leave,Math.max(a,b));}if(enter>=leave)continue;const a=1-Math.exp(-s.density*(.32+.68*lum)*(leave-enter)/(2*r.half[2])),blend=Math.exp(-(sx*sx+sy*sy)*.9);for(let j=0;j<3;j++){const bg=[.018,.025,.029][j]*(1-blend)+[.065,.083,.092][j]*blend;const expected=255*(color[j]*a+bg*(1-a));worst=Math.max(worst,Math.abs(pixels[(y*w+x)*4+j]-expected));}}
+}
+log(`no camera-following opacity band (${worst.toFixed(2)} / 255 error)`,worst<3);
+lines.push('ALL GPU CHECKS PASSED');document.querySelector('#results').textContent=lines.join('\n');
+}catch(e){document.querySelector('#results').textContent=lines.join('\n')+'\nERROR '+e.stack;}
+</script></body></html>
