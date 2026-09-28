@@ -15,7 +15,7 @@ GitHub Pages serves static HTML, JavaScript, CSS and the sample clip. Imported v
 - Scan speed 1x traverses the selected clip duration in real time. The center has a narrow snap zone.
 - Sine has a direction angle in surface XY. Noise animation loops continuously. Phase is measured in turns; animation speed in cycles per second.
 - The outlined output frame is the exported image, with an independent aspect ratio and resolution. Black pixels outside the sampled volume are part of the export.
-- MP4 recording is silent, at 30 fps, and requires browser H.264 MediaRecorder support. Output dimensions are locked while recording; recording stops after three minutes or when the tab is hidden.
+- MP4 recording is silent, targeting 30 fps, and requires browser H.264 MediaRecorder support. Ready output frames are explicitly submitted where supported. During recording, 3D preview is capped at a 640-pixel long edge and 15 fps; output resolution is unchanged. The submitted FPS counter measures capture requests, not encoder-confirmed frames. Real-time capture can still drop frames under load. Output dimensions are locked while recording; recording stops after three minutes or when the tab is hidden.
 
 ## Run locally
 

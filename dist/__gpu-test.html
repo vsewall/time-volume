@@ -8,6 +8,7 @@ const c=document.createElement('canvas');c.width=32;c.height=64;const ctx=c.getC
 for(let i=0;i<4;i++){ctx.fillStyle=`rgb(${i*60},100,200)`;ctx.fillRect(0,0,32,64);r.upload(c,i);}r.count=4;
 const px=(x=.5,y=.5)=>r.out2d.getImageData(Math.floor(r.ow*x),Math.floor(r.oh*y),1,1).data;
 r.render(s);log('portrait input preserves 1:2 aspect',r.ow===80&&r.oh===160);log('interpolated middle frame',Math.abs(px()[0]-90)<3);
+const uncapped=new Uint8Array(r.out2d.getImageData(0,0,r.ow,r.oh).data);r.render(s,{previewMaxEdge:128});log('recording preview budget caps only volume size',Math.max(r.canvas.width,r.canvas.height)<=128&&r.ow===80&&r.oh===160);const capped=r.out2d.getImageData(0,0,r.ow,r.oh).data;log('preview budget does not change output pixels',uncapped.every((v,i)=>v===capped[i]));
 s.position=-1;r.render(s);log('earliest frame',px()[0]<3);s.position=1;r.render(s);log('latest frame',Math.abs(px()[0]-180)<3);
 r.head=2;s.position=-1;r.render(s);log('ring oldest offset',Math.abs(px()[0]-120)<3);s.position=1;r.render(s);log('ring newest wraps',Math.abs(px()[0]-60)<3);
 r.head=0;s.position=0;s.ry=90;s.outputAR='slice';r.render(s);const left=px(.2)[0],right=px(.8)[0];log('side slice traverses time',Math.abs(left-right)>70);
